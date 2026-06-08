@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://casamento-joao-pedro-jessica.vercel.app/sitemap.xml
