@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 236, 0.92), transparent 34rem),
+    radial-gradient(circle at 80% 20%, rgba(224, 24, 130, 0.12), transparent 28rem),
+    linear-gradient(180deg, #fff7fb, #fff0f8 44%, #fffaf7);
+  color: #271a1f;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: #c01868;
+  color: white;
+}
+
+.focus-ring {
+  @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fuchsiaWedding;
+}
+
+.glass-panel {
+  @apply border border-white/60 bg-white/70 shadow-premium backdrop-blur-xl;
+}
+
+.section-pad {
+  @apply px-5 py-20 md:px-10 lg:px-16 lg:py-28;
+}
+
+.container-premium {
+  @apply mx-auto w-full max-w-7xl;
+}
+
+.heading-eyebrow {
+  @apply text-xs font-bold uppercase tracking-[0.28em] text-fuchsiaWedding;
+}
+
+.serif-title {
+  @apply font-display text-5xl font-medium leading-[0.95] text-rosewood md:text-7xl;
+}
