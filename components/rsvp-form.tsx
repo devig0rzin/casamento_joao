@@ -74,8 +74,13 @@ export function RSVPForm() {
       });
 
       if (!response.ok) throw new Error("E-mail nao enviado");
+      const result = (await response.json()) as { emailSent?: boolean };
 
-      setStatus("Presenca confirmada. Enviamos a confirmacao para os noivos.");
+      setStatus(
+        result.emailSent
+          ? "Presenca confirmada. Enviamos a confirmacao para os noivos."
+          : "Presenca confirmada no site, mas o e-mail automatico nao foi enviado.",
+      );
     } catch {
       setStatus("Presenca confirmada no site, mas o e-mail automatico nao foi enviado.");
     } finally {

@@ -13,6 +13,7 @@ type RsvpPayload = {
 };
 
 const required = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "NEXT_PUBLIC_RSVP_EMAIL"] as const;
+const smtpTimeoutMs = Number(process.env.SMTP_TIMEOUT_MS || 8000);
 
 const encodeHeader = (value: string) => `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
 
@@ -43,24 +44,33 @@ class SmtpClient {
 
   private readResponse() {
     return new Promise<string>((resolve, reject) => {
+      let timeout: ReturnType<typeof setTimeout>;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        this.socket?.off("data", onData);
+        this.socket?.off("error", onError);
+      };
       const onData = (chunk: Buffer) => {
         this.buffer += chunk.toString("utf8");
         const lines = this.buffer.split(/\r?\n/).filter(Boolean);
         const last = lines.at(-1);
         if (last && /^\d{3}\s/.test(last)) {
-          this.socket?.off("data", onData);
-          this.socket?.off("error", onError);
+          cleanup();
           const response = this.buffer;
           this.buffer = "";
           resolve(response);
         }
       };
       const onError = (error: Error) => {
-        this.socket?.off("data", onData);
+        cleanup();
         reject(error);
       };
       this.socket?.on("data", onData);
       this.socket?.once("error", onError);
+      timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error(`SMTP response timed out after ${smtpTimeoutMs}ms`));
+      }, smtpTimeoutMs);
     });
   }
 
@@ -74,7 +84,18 @@ class SmtpClient {
   }
 
   async connect() {
-    this.socket = net.connect(this.port, this.host);
+    this.socket =
+      this.port === 465
+        ? tls.connect({
+            host: this.host,
+            port: this.port,
+            servername: this.host,
+            rejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== "false",
+          })
+        : net.connect(this.port, this.host);
+    this.socket.setTimeout(smtpTimeoutMs, () => {
+      this.socket?.destroy(new Error(`SMTP connection timed out after ${smtpTimeoutMs}ms`));
+    });
     await this.expect(null, ["220"]);
   }
 
@@ -194,13 +215,13 @@ export async function POST(request: Request) {
 
   try {
     await client.connect();
-    await client.startTls(host);
+    if (port !== 465) await client.startTls(host);
     await client.login(user, password);
     await client.send(from, to, buildEmail({ name, phone, email, companions, message }, from, to));
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, emailSent: true });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Nao foi possivel enviar o e-mail de confirmacao." }, { status: 500 });
+    console.warn("RSVP confirmado, mas o e-mail automatico falhou.", error);
+    return NextResponse.json({ ok: true, emailSent: false });
   } finally {
     client.close();
   }
