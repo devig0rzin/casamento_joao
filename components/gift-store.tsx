@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Copy, Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { recordGiftPayment, setGiftStatus } from "@/lib/local-store";
 import { buildPixPayload, formatCurrency, isPixConfigured, type PixKeyType } from "@/lib/pix";
 import { gifts, wedding, type Gift } from "@/lib/wedding-data";
@@ -27,6 +27,7 @@ export function GiftStore() {
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [copied, setCopied] = useState(false);
+  const paymentRef = useRef<HTMLElement>(null);
 
   const filtered = useMemo(() => {
     return gifts.filter((gift) => {
@@ -64,9 +65,16 @@ export function GiftStore() {
       })
     : "";
 
-  function addToCart(gift: Gift) {
+  function scrollToPayment() {
+    window.setTimeout(() => {
+      paymentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+
+  function addToCart(gift: Gift, shouldScrollToPayment = false) {
     setCopied(false);
     setCart((current) => ({ ...current, [gift.id]: (current[gift.id] || 0) + 1 }));
+    if (shouldScrollToPayment) scrollToPayment();
   }
 
   function decreaseFromCart(giftId: string) {
@@ -160,7 +168,7 @@ export function GiftStore() {
                   <button
                     className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-rosewood px-4 text-sm font-bold text-white transition hover:-translate-y-0.5"
                     type="button"
-                    onClick={() => addToCart(gift)}
+                    onClick={() => addToCart(gift, true)}
                   >
                     <Plus size={16} /> Adicionar
                   </button>
@@ -171,7 +179,7 @@ export function GiftStore() {
         </div>
       </section>
 
-      <aside className="glass-panel sticky top-24 h-fit rounded-[2rem] p-6">
+      <aside ref={paymentRef} className="glass-panel sticky top-24 h-fit scroll-mt-6 rounded-[2rem] p-6">
         <p className="heading-eyebrow">Carrinho</p>
         <div className="mt-3 flex items-start justify-between gap-3">
           <h2 className="font-display text-4xl text-rosewood">Pagamento Pix</h2>
