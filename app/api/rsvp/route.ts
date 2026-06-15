@@ -258,6 +258,33 @@ async function sendWithResend(guest: RsvpPayload, from: string, to: string) {
   return true;
 }
 
+async function sendWithWebhook(guest: RsvpPayload, from: string, to: string) {
+  const webhookUrl = process.env.RSVP_EMAIL_WEBHOOK_URL;
+  if (!webhookUrl) return false;
+
+  const { subject, text, html } = buildEmailContent(guest);
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      from,
+      to,
+      replyTo: guest.email,
+      subject,
+      text,
+      html,
+      guest,
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Email webhook failed: HTTP ${response.status} ${details.slice(0, 240)}`);
+  }
+
+  return true;
+}
+
 export async function POST(request: Request) {
   const emailEnabled = process.env.RSVP_EMAIL_ENABLED !== "false";
   const payload = (await request.json()) as RsvpPayload;
@@ -276,8 +303,16 @@ export async function POST(request: Request) {
   const from = process.env.EMAIL_FROM!;
   const to = process.env.NEXT_PUBLIC_RSVP_EMAIL!;
 
-  if (process.env.RESEND_API_KEY && (!from || !to)) {
+  if ((process.env.RESEND_API_KEY || process.env.RSVP_EMAIL_WEBHOOK_URL) && (!from || !to)) {
     return NextResponse.json({ error: "Configuracao de e-mail incompleta: EMAIL_FROM, NEXT_PUBLIC_RSVP_EMAIL" }, { status: 500 });
+  }
+
+  try {
+    const sentByWebhook = await sendWithWebhook({ name, phone, email, companions, message }, from, to);
+    if (sentByWebhook) return NextResponse.json({ ok: true, emailSent: true, provider: "webhook" });
+  } catch (error) {
+    console.log(`RSVP confirmado, mas o webhook de e-mail falhou: ${formatSmtpError(error)}`);
+    return NextResponse.json({ ok: true, emailSent: false });
   }
 
   try {
