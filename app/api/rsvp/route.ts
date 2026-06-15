@@ -201,6 +201,63 @@ function buildEmail(guest: RsvpPayload, from: string, to: string) {
   ].join("\r\n");
 }
 
+function buildEmailContent(guest: RsvpPayload) {
+  const subject = `Confirmacao de presenca - ${guest.name}`;
+  const text = [
+    "Confirmacao de presenca",
+    "",
+    `Nome: ${guest.name}`,
+    `Telefone: ${guest.phone}`,
+    `E-mail: ${guest.email}`,
+    `Acompanhantes: ${guest.companions}`,
+    `Mensagem: ${guest.message || "-"}`,
+    "",
+    "Casamento Joao Pedro e Jessica",
+  ].join("\n");
+
+  const html = `
+    <h2>Confirmacao de presenca</h2>
+    <p><strong>Nome:</strong> ${escapeHtml(guest.name)}</p>
+    <p><strong>Telefone:</strong> ${escapeHtml(guest.phone)}</p>
+    <p><strong>E-mail:</strong> ${escapeHtml(guest.email)}</p>
+    <p><strong>Acompanhantes:</strong> ${guest.companions}</p>
+    <p><strong>Mensagem:</strong> ${escapeHtml(guest.message || "-")}</p>
+    <p>Casamento Joao Pedro e Jessica</p>
+  `.trim();
+
+  return { subject, text, html };
+}
+
+async function sendWithResend(guest: RsvpPayload, from: string, to: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+
+  const resendFrom = process.env.RESEND_FROM || from;
+  const { subject, text, html } = buildEmailContent(guest);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: resendFrom,
+      to,
+      reply_to: guest.email,
+      subject,
+      text,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(`Resend failed: HTTP ${response.status} ${details.slice(0, 240)}`);
+  }
+
+  return true;
+}
+
 export async function POST(request: Request) {
   const emailEnabled = process.env.RSVP_EMAIL_ENABLED !== "false";
   const payload = (await request.json()) as RsvpPayload;
@@ -216,6 +273,21 @@ export async function POST(request: Request) {
 
   if (!emailEnabled) return NextResponse.json({ ok: true, emailSent: false });
 
+  const from = process.env.EMAIL_FROM!;
+  const to = process.env.NEXT_PUBLIC_RSVP_EMAIL!;
+
+  if (process.env.RESEND_API_KEY && (!from || !to)) {
+    return NextResponse.json({ error: "Configuracao de e-mail incompleta: EMAIL_FROM, NEXT_PUBLIC_RSVP_EMAIL" }, { status: 500 });
+  }
+
+  try {
+    const sentByResend = await sendWithResend({ name, phone, email, companions, message }, from, to);
+    if (sentByResend) return NextResponse.json({ ok: true, emailSent: true, provider: "resend" });
+  } catch (error) {
+    console.log(`RSVP confirmado, mas o Resend falhou: ${formatSmtpError(error)}`);
+    return NextResponse.json({ ok: true, emailSent: false });
+  }
+
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length) {
     return NextResponse.json({ error: `Configuracao de e-mail incompleta: ${missing.join(", ")}` }, { status: 500 });
@@ -223,8 +295,6 @@ export async function POST(request: Request) {
 
   const host = process.env.SMTP_HOST!;
   const port = Number(process.env.SMTP_PORT || 587);
-  const from = process.env.EMAIL_FROM!;
-  const to = process.env.NEXT_PUBLIC_RSVP_EMAIL!;
   const user = process.env.SMTP_USER!;
   const password = process.env.SMTP_PASSWORD!;
   const client = new SmtpClient(host, port);
