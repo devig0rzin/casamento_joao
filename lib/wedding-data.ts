@@ -115,24 +115,6 @@ export const weddingParty = [
 
 export const gifts: Gift[] = [
   {
-    id: "teste-pix",
-    name: "Teste Pix",
-    category: "experiencias",
-    price: 0.1,
-    status: "available",
-    image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=82",
-    description: "Produto de teste para validar pagamento Pix de R$ 0,10.",
-  },
-  {
-    id: "teste-pix-1-real",
-    name: "Teste Pix 1 real",
-    category: "experiencias",
-    price: 1,
-    status: "available",
-    image: "https://images.unsplash.com/photo-1554224154-26032ffc0d07?auto=format&fit=crop&w=900&q=82",
-    description: "Produto de teste para validar pagamento Pix de R$ 1,00.",
-  },
-  {
     id: "pano-prato",
     name: "Kit pano de prato",
     category: "cozinha",
@@ -248,15 +230,6 @@ export const gifts: Gift[] = [
     status: "gifted",
     image: "/gifts/kit-toalhas.jpg",
     description: "Conforto para a casa nova.",
-  },
-  {
-    id: "jogo-cama-antigo",
-    name: "Jogo de cama",
-    category: "quarto",
-    price: 190,
-    status: "available",
-    image: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=900&q=82",
-    description: "Para deixar o quarto especial.",
   },
   {
     id: "cota-sofa",
