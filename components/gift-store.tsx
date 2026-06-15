@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Copy, Search } from "lucide-react";
+import { Copy, Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useMemo, useState } from "react";
 import { recordGiftPayment, setGiftStatus } from "@/lib/local-store";
@@ -25,7 +25,7 @@ const statusLabels = {
 export function GiftStore() {
   const [category, setCategory] = useState<keyof typeof categoryLabels>("todos");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Gift>(gifts[0]);
+  const [cart, setCart] = useState<Record<string, number>>({});
   const [copied, setCopied] = useState(false);
 
   const filtered = useMemo(() => {
@@ -38,29 +38,66 @@ export function GiftStore() {
 
   const giftedCount = gifts.filter((gift) => gift.status === "gifted").length;
   const progress = Math.round((giftedCount / gifts.length) * 100);
+  const cartItems = useMemo(
+    () =>
+      gifts
+        .map((gift) => ({ gift, quantity: cart[gift.id] || 0 }))
+        .filter((item) => item.quantity > 0),
+    [cart],
+  );
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.gift.price * item.quantity, 0);
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartDescription = cartItems.map((item) => `${item.quantity}x ${item.gift.name}`).join(", ");
+  const cartSignature = cartItems.map((item) => `${item.gift.id}:${item.quantity}`).join("|");
   const pixReady = isPixConfigured(wedding.pixKey);
-  const pixTxid = `JPJ${selected.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 22)}`;
-  const pixPayload = pixReady
+  const canPay = pixReady && cartItems.length > 0;
+  const pixTxid = useMemo(() => `JPJ${Date.now().toString(36).toUpperCase()}`, [cartSignature]);
+  const pixPayload = canPay
     ? buildPixPayload({
         key: wedding.pixKey,
         merchantName: wedding.pixMerchantName,
         merchantCity: wedding.pixMerchantCity,
-        amount: selected.price,
-        description: selected.name,
+        amount: cartTotal,
+        description: "Presentes casamento",
         txid: pixTxid,
         keyType: wedding.pixKeyType as PixKeyType,
       })
     : "";
 
+  function addToCart(gift: Gift) {
+    setCopied(false);
+    setCart((current) => ({ ...current, [gift.id]: (current[gift.id] || 0) + 1 }));
+  }
+
+  function decreaseFromCart(giftId: string) {
+    setCopied(false);
+    setCart((current) => {
+      const nextQuantity = (current[giftId] || 0) - 1;
+      const next = { ...current };
+      if (nextQuantity > 0) next[giftId] = nextQuantity;
+      else delete next[giftId];
+      return next;
+    });
+  }
+
+  function removeFromCart(giftId: string) {
+    setCopied(false);
+    setCart((current) => {
+      const next = { ...current };
+      delete next[giftId];
+      return next;
+    });
+  }
+
   async function copyPix() {
-    if (!pixReady) return;
+    if (!canPay) return;
     await navigator.clipboard.writeText(pixPayload);
-    setGiftStatus(selected.id, "reserved");
+    cartItems.forEach((item) => setGiftStatus(item.gift.id, "reserved"));
     await recordGiftPayment({
-      giftId: selected.id,
-      giftName: selected.name,
+      giftId: cartItems.map((item) => item.gift.id).join(","),
+      giftName: cartDescription,
       pixTxid,
-      amount: selected.price,
+      amount: cartTotal,
     });
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2200);
@@ -107,11 +144,9 @@ export function GiftStore() {
 
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((gift) => (
-            <button
-              className={`focus-ring overflow-hidden rounded-[1.7rem] bg-white text-left shadow-soft transition hover:-translate-y-1 ${selected.id === gift.id ? "ring-2 ring-fuchsiaWedding" : ""}`}
+            <article
+              className={`overflow-hidden rounded-[1.7rem] bg-white text-left shadow-soft transition hover:-translate-y-1 ${cart[gift.id] ? "ring-2 ring-fuchsiaWedding" : ""}`}
               key={gift.id}
-              type="button"
-              onClick={() => setSelected(gift)}
             >
               <div className="relative aspect-[4/3]">
                 <Image src={gift.image} alt={gift.name} fill sizes="(max-width: 768px) 100vw, 30vw" className="object-cover" />
@@ -120,23 +155,86 @@ export function GiftStore() {
                 <span className="w-fit rounded-full bg-blush px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-fuchsiaWedding">{statusLabels[gift.status]}</span>
                 <h3 className="text-lg font-bold text-rosewood">{gift.name}</h3>
                 <p className="min-h-12 text-sm leading-6 text-rosewood/62">{gift.description}</p>
-                <strong className="text-xl text-rosewood">{formatCurrency(gift.price)}</strong>
+                <div className="flex items-center justify-between gap-3">
+                  <strong className="text-xl text-rosewood">{formatCurrency(gift.price)}</strong>
+                  <button
+                    className="focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-rosewood px-4 text-sm font-bold text-white transition hover:-translate-y-0.5"
+                    type="button"
+                    onClick={() => addToCart(gift)}
+                  >
+                    <Plus size={16} /> Adicionar
+                  </button>
+                </div>
               </div>
-            </button>
+            </article>
           ))}
         </div>
       </section>
 
       <aside className="glass-panel sticky top-24 h-fit rounded-[2rem] p-6">
-        <p className="heading-eyebrow">Pagamento Pix</p>
-        <h2 className="mt-3 font-display text-4xl text-rosewood">{selected.name}</h2>
-        <p className="mt-2 text-2xl font-bold text-fuchsiaWedding">{formatCurrency(selected.price)}</p>
+        <p className="heading-eyebrow">Carrinho</p>
+        <div className="mt-3 flex items-start justify-between gap-3">
+          <h2 className="font-display text-4xl text-rosewood">Pagamento Pix</h2>
+          <span className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full bg-white text-sm font-bold text-fuchsiaWedding shadow-soft">
+            <ShoppingCart size={18} />
+            <span className="ml-1">{cartCount}</span>
+          </span>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {cartItems.length > 0 ? (
+            cartItems.map((item) => (
+              <div className="rounded-2xl bg-white p-4 shadow-soft" key={item.gift.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-rosewood">{item.gift.name}</p>
+                    <p className="mt-1 text-sm font-semibold text-rosewood/60">
+                      {item.quantity} x {formatCurrency(item.gift.price)}
+                    </p>
+                  </div>
+                  <strong className="text-rosewood">{formatCurrency(item.gift.price * item.quantity)}</strong>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    className="focus-ring grid h-9 w-9 place-items-center rounded-full bg-blush text-rosewood"
+                    type="button"
+                    onClick={() => decreaseFromCart(item.gift.id)}
+                    aria-label={`Diminuir ${item.gift.name}`}
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <button
+                    className="focus-ring grid h-9 w-9 place-items-center rounded-full bg-blush text-rosewood"
+                    type="button"
+                    onClick={() => addToCart(item.gift)}
+                    aria-label={`Adicionar mais ${item.gift.name}`}
+                  >
+                    <Plus size={16} />
+                  </button>
+                  <button
+                    className="focus-ring ml-auto grid h-9 w-9 place-items-center rounded-full bg-rosewood text-white"
+                    type="button"
+                    onClick={() => removeFromCart(item.gift.id)}
+                    aria-label={`Remover ${item.gift.name}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-2xl bg-white p-5 text-sm font-semibold leading-6 text-rosewood/65 shadow-soft">
+              Adicione um ou mais presentes para gerar um Pix unico com o valor total.
+            </div>
+          )}
+        </div>
+        <p className="mt-5 text-sm font-semibold uppercase tracking-[0.16em] text-rosewood/50">Total</p>
+        <p className="mt-1 text-3xl font-bold text-fuchsiaWedding">{formatCurrency(cartTotal)}</p>
         <div className="mt-6 grid place-items-center rounded-[1.5rem] bg-white p-5 shadow-soft">
-          {pixReady ? (
+          {canPay ? (
             <QRCodeSVG value={pixPayload} size={210} level="M" bgColor="#fffaf7" fgColor="#3a1d27" />
           ) : (
             <div className="grid h-[210px] w-[210px] place-items-center rounded-2xl bg-blush p-6 text-center text-sm font-bold leading-6 text-rosewood">
-              Configure a chave Pix para liberar o QR Code.
+              {pixReady ? "Adicione presentes ao carrinho para liberar o QR Code." : "Configure a chave Pix para liberar o QR Code."}
             </div>
           )}
         </div>
@@ -145,9 +243,9 @@ export function GiftStore() {
           className="focus-ring mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-rosewood px-6 font-bold text-white shadow-soft transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
           type="button"
           onClick={copyPix}
-          disabled={!pixReady}
+          disabled={!canPay}
         >
-          <Copy size={18} /> {copied ? "Copiado" : "Copiar Pix"}
+          <Copy size={18} /> {copied ? "Copiado" : "Copiar Pix do total"}
         </button>
       </aside>
     </div>
