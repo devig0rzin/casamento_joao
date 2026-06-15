@@ -29,6 +29,19 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
+const formatSmtpError = (error: unknown) => {
+  if (error instanceof AggregateError) {
+    const codes = error.errors
+      .map((item) => (item && typeof item === "object" && "code" in item ? String(item.code) : "unknown"))
+      .join(",");
+    return `AggregateError${codes ? ` codes=${codes}` : ""}`;
+  }
+
+  if (error && typeof error === "object" && "code" in error) return String(error.code);
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
 class SmtpClient {
   private socket?: net.Socket | tls.TLSSocket;
   private buffer = "";
@@ -189,11 +202,7 @@ function buildEmail(guest: RsvpPayload, from: string, to: string) {
 }
 
 export async function POST(request: Request) {
-  const missing = required.filter((key) => !process.env[key]);
-  if (missing.length) {
-    return NextResponse.json({ error: `Configuracao de e-mail incompleta: ${missing.join(", ")}` }, { status: 500 });
-  }
-
+  const emailEnabled = process.env.RSVP_EMAIL_ENABLED !== "false";
   const payload = (await request.json()) as RsvpPayload;
   const name = String(payload.name || "").trim();
   const phone = String(payload.phone || "").trim();
@@ -203,6 +212,13 @@ export async function POST(request: Request) {
 
   if (name.length < 3 || phone.replace(/\D/g, "").length < 10 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Dados de confirmacao invalidos." }, { status: 400 });
+  }
+
+  if (!emailEnabled) return NextResponse.json({ ok: true, emailSent: false });
+
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length) {
+    return NextResponse.json({ error: `Configuracao de e-mail incompleta: ${missing.join(", ")}` }, { status: 500 });
   }
 
   const host = process.env.SMTP_HOST!;
@@ -220,7 +236,7 @@ export async function POST(request: Request) {
     await client.send(from, to, buildEmail({ name, phone, email, companions, message }, from, to));
     return NextResponse.json({ ok: true, emailSent: true });
   } catch (error) {
-    console.warn("RSVP confirmado, mas o e-mail automatico falhou.", error);
+    console.log(`RSVP confirmado, mas o e-mail automatico falhou: ${formatSmtpError(error)}`);
     return NextResponse.json({ ok: true, emailSent: false });
   } finally {
     client.close();
