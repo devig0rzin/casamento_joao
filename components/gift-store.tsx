@@ -66,9 +66,18 @@ export function GiftStore() {
     : "";
 
   function scrollToPayment() {
-    window.setTimeout(() => {
-      paymentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+    const scroll = () => {
+      const payment = paymentRef.current;
+      if (!payment) return;
+
+      const top = payment.getBoundingClientRect().top + window.scrollY - 16;
+      window.scrollTo({ top, behavior: "smooth" });
+    };
+
+    window.requestAnimationFrame(() => {
+      scroll();
+      window.setTimeout(scroll, 180);
+    });
   }
 
   function addToCart(gift: Gift, shouldScrollToPayment = false) {
@@ -179,7 +188,7 @@ export function GiftStore() {
         </div>
       </section>
 
-      <aside ref={paymentRef} className="glass-panel sticky top-24 h-fit scroll-mt-6 rounded-[2rem] p-6">
+      <aside ref={paymentRef} className="glass-panel h-fit scroll-mt-4 rounded-[2rem] p-6 lg:sticky lg:top-24">
         <p className="heading-eyebrow">Carrinho</p>
         <div className="mt-3 flex items-start justify-between gap-3">
           <h2 className="font-display text-4xl text-rosewood">Pagamento Pix</h2>
