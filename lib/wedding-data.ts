@@ -46,7 +46,7 @@ export const wedding = {
   wazeUrl: "https://waze.com/ul?q=R.%20Bal%C3%A3o%20M%C3%A1gico%2C%201506%20Cotia%20SP&navigate=yes",
   mapEmbed:
     "https://www.google.com/maps?q=R.%20Bal%C3%A3o%20M%C3%A1gico%2C%201506%20-%20Rio%20Cotia%2C%20Cotia%20-%20SP%2C%2006715-780&output=embed",
-  pixKey: process.env.NEXT_PUBLIC_PIX_KEY || "11952755877",
+  pixKey: process.env.NEXT_PUBLIC_PIX_KEY || "42569722855",
   pixKeyType: process.env.NEXT_PUBLIC_PIX_KEY_TYPE || "auto",
   pixMerchantName: process.env.NEXT_PUBLIC_PIX_MERCHANT_NAME || "JOAO PEDRO E JESSICA",
   pixMerchantCity: process.env.NEXT_PUBLIC_PIX_MERCHANT_CITY || "COTIA",
